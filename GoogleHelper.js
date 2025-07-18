@@ -77,7 +77,90 @@ class GoogleHelper {
     return this.getIsoWeek(today).week;
   }
 
+  /**
+ * Записать значение в указанную ячейку
+ * @param {string} sheetName — Название листа
+ * @param {string} cell — Адрес ячейки в формате A1 (например, "A1", "B2")
+ * @param {string|number} value — Значение для записи
+ */
+  static async writeToCell(sheetName, cell, value) {
+    try {
+      const range = `${sheetName}!${cell}`;
+      await this.gsapi.spreadsheets.values.update({
+        spreadsheetId: this.S_ID,
+        range: range,
+        valueInputOption: 'RAW',
+        resource: {
+          values: [[value]]
+        }
+      });
+      console.log(`✅ Значение "${value}" успешно записано в ячейку ${range}`);
+    } catch (error) {
+      console.error(`❌ Ошибка при записи в ячейку ${cell}:`, error);
+      throw error;
+    }
+  }
 
+  /**
+ * Найти первую пустую строку в указанном диапазоне столбцов
+ * @param {number} gid — GID листа (sheetId)
+ * @param {string} columnRange — Диапазон столбцов для проверки (например, "A:A" или "A:C")
+ * @returns {Promise<number>} Номер первой пустой строки (начиная с 1)
+ */
+  static async findFirstEmptyRow(gid, columnRange) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+      const rangeAddress = `${sheetName}!${columnRange}`;
+      const response = await this.gsapi.spreadsheets.values.get({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress
+      });
+      const values = response.data.values || [];
+      let rowIndex = 1;
+      for (const row of values) {
+        if (row.every(cell => cell === '' || cell === undefined)) {
+          return rowIndex;
+        }
+        rowIndex++;
+      }
+      return rowIndex; // Если все строки заполнены, возвращаем следующую
+    } catch (error) {
+      console.error(`❌ Ошибка при поиске пустой строки в диапазоне ${columnRange} на листе с GID ${gid}:`, error);
+      throw error;
+    }
+  }
+
+
+  /**
+ * Записать значения в указанный диапазон ячеек
+ * @param {number} gid — GID листа (sheetId)
+ * @param {string} range — Диапазон ячеек в формате A1 (например, "A1" или "A1:B2")
+ * @param {Array<Array<string|number>>} values — Массив значений для записи (например, [['A1', 'B1'], ['A2', 'B2']])
+ */
+  static async writeToRange(gid, range, values) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+      const rangeAddress = `${sheetName}!${range}`;
+      await this.gsapi.spreadsheets.values.update({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress,
+        valueInputOption: 'RAW',
+        resource: {
+          values: values
+        }
+      });
+      console.log(`✅ Значения успешно записаны в диапазон ${rangeAddress}`);
+    } catch (error) {
+      console.error(`❌ Ошибка при записи в диапазон ${range} на листе с GID ${gid}:`, error);
+      throw error;
+    }
+  }
 
   /**
    * Получение имени листа по GID
