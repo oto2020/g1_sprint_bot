@@ -86,6 +86,8 @@ const keyboard = {
     console.log('Текущий спринт:', currentSprintObjTitleAndGid);
     console.log('Следующий спринт:', nextSprintObjTitleAndGid);
 
+    let { sources, priorities, statuses } = await GoogleHelper.getSourcesPrioritiesStatusesFromColumns(referenceBookGid);
+    console.log(sources, priorities, statuses);
     console.log(' ///// БОТ ГОТОВ К РАБОТЕ /////// ');
 
     // // Заглушка !!!! УБРАТЬ И РАСКОММЕНТИРОВАТЬ ВЕРХНИЕ СТРОКИ

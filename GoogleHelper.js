@@ -274,6 +274,111 @@ class GoogleHelper {
   }
 
 
+  /**
+ * Найти строку, где значение в столбце A заканчивается на substring,
+ * изменить значение в указанной ячейке (по имени столбца) и вернуть объект task до изменения
+ * @param {number} gid — GID листа (sheetId)
+ * @param {string} substring — Подстрока для поиска в столбце A
+ * @param {string} columnLetter — Буква столбца для изменения (например, 'B', 'C', ...)
+ * @param {string|number} newValue — Новое значение для ячейки
+ * @returns {Promise<Object|null>} Объект task с полями A–J (до изменения) или null, если строка не найдена
+ */
+  static async updateCellInRowBySubstringInA(gid, substring, columnLetter, newValue) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+
+      const rangeAddress = `${sheetName}!A:J`;
+      const response = await this.gsapi.spreadsheets.values.get({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress
+      });
+
+      const values = response.data.values || [];
+      const columnNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+      const columnIndex = columnNames.indexOf(columnLetter.toUpperCase());
+
+      if (columnIndex === -1) {
+        throw new Error(`Недопустимое имя столбца: ${columnLetter}`);
+      }
+
+      let rowIndex = 0;
+      for (const row of values) {
+        const cellA = row[0] || '';
+        if (typeof cellA === 'string' && cellA.endsWith(substring)) {
+          // Собираем исходные данные
+          const task = {};
+          for (let i = 0; i < 10; i++) {
+            task[columnNames[i]] = row[i] ?? '';
+          }
+          task['sheetName'] = sheetName;
+
+          // Формируем точный адрес ячейки для обновления
+          const targetCell = `${columnLetter}${rowIndex + 1}`;
+          const targetRange = `${sheetName}!${targetCell}`;
+
+          await this.gsapi.spreadsheets.values.update({
+            spreadsheetId: this.S_ID,
+            range: targetRange,
+            valueInputOption: 'RAW',
+            resource: {
+              values: [[newValue]]
+            }
+          });
+
+          console.log(`✏️ Ячейка ${targetCell} успешно обновлена значением "${newValue}". Task:`, task);
+          return task;
+        }
+        rowIndex++;
+      }
+
+      console.log(`ℹ️ Строка, заканчивающаяся на "${substring}", не найдена на листе "${sheetName}"`);
+      return null;
+    } catch (error) {
+      console.error(`❌ Ошибка при обновлении ячейки "${columnLetter}" в строке с подстрокой "${substring}" в столбце A:`, error);
+      throw error;
+    }
+  }
+
+  /**
+ * Получить массивы значений из столбцов G, H, I начиная со 2-й строки:
+ * G → sources, H → priorities, I → statuses
+ * @param {number} gid — GID листа (sheetId)
+ * @returns {Promise<{ sources: string[], priorities: string[], statuses: string[] }>}
+ */
+  static async getSourcesPrioritiesStatusesFromColumns(gid) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+
+      const ranges = [`${sheetName}!G2:G`, `${sheetName}!H2:H`, `${sheetName}!I2:I`];
+
+      const response = await this.gsapi.spreadsheets.values.batchGet({
+        spreadsheetId: this.S_ID,
+        ranges: ranges
+      });
+
+      const getColumnValues = (index) =>
+        (response.data.valueRanges?.[index]?.values || [])
+          .map(row => (row[0] || '').trim())
+          .filter(value => value !== '');
+
+      const sources = getColumnValues(0);
+      const priorities = getColumnValues(1);
+      const statuses = getColumnValues(2);
+
+      return { sources, priorities, statuses };
+    } catch (error) {
+      console.error('❌ Ошибка при получении значений из столбцов G/H/I:', error);
+      throw error;
+    }
+  }
+
+
 }
 
 module.exports = GoogleHelper;
