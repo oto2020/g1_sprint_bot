@@ -127,7 +127,7 @@ const keyboard = {
 
                 // записываем строку целиком
                 let row = [id, isCompleted, taskText, responsibleName, sourceName, priority, linkB24, comment, status];
-                await GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
+                GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
 
                 // Информируем, что задача поставлена
                 await TelegramHelper.editMessageText(
@@ -138,7 +138,7 @@ const keyboard = {
                     `<b>${taskText}</b>\n\n` +
                     `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
                     `<i>Используйте клавиатуру, чтобы изменить:\n` +
-                    `Исполнителя / Источник,\n`+ 
+                    `Исполнителя / Источник,\n` +
                     `Срочность / Статус задачи</i>`,
                     'HTML',
                     true
@@ -155,7 +155,7 @@ const keyboard = {
                             { text: `${status}`, callback_data: `change_status@${chatId}@${messageId}` },
                         ],
                         [
-                            { text: '✖️ Закрыть просмотр', callback_data: `cancel@${chatId}@${messageId}` },
+                            { text: '❌ Удалить задачу', callback_data: `delete@${chatId}@${messageId}@${sprintObj.gid}` },
                         ]
                     ]
                 };
@@ -173,8 +173,21 @@ const keyboard = {
 
             // Была нажата кнопка удаления задачи
             case 'delete':
+                let gid = param1;
+                let idSubstring = `_${chatId}_${messageId}`;
+                let task = await GoogleHelper.deleteRowBySubstringInA(gid, idSubstring);
                 await bot.deleteMessage(chatId, messageId);
-                await bot.sendMessage(chatId, `Задача ${chatId}@${messageId} удалена!\nTODO: удалить задачу из гугл-таблицы`);
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Задача удалена:\n\n` + 
+                    `<b>${task.C}</b>\n\n` + 
+                    `Ответственный: ${task.D}\n` + 
+                    `Источник: ${task.E}\n` + 
+                    `Приоритет: ${task.F}\n` + 
+                    `Комментарий: ${task.H}\n` + 
+                    `Статус: ${task.I}\n\n` +
+                    `${task.sheetName}`,
+                    { parse_mode: 'HTML' });
                 break;
         }
     });
@@ -202,7 +215,7 @@ const keyboard = {
 
         // Отправим сообщение и сохраним в кеш
         let taskText = msg.text;
-        let newMsg = await bot.sendMessage(chatId, `⬜️ Постановка задачи:\n${msg.text}`);
+        let newMsg = await bot.sendMessage(chatId, `🧐 Постановка задачи:\n${msg.text}`);
         let messageId = newMsg.message_id;
         tasks[`${chatId}@${messageId}`] = taskText;
 
@@ -214,7 +227,7 @@ const keyboard = {
                     { text: '↩️ В следующий спринт', callback_data: `create@${chatId}@${messageId}@toNext` },
                 ],
                 [
-                    { text: '❌ Отмена', callback_data: `cancel@${chatId}@${messageId}` }
+                    { text: '✖️ Отмена', callback_data: `cancel@${chatId}@${messageId}` }
                 ]]
         };
 

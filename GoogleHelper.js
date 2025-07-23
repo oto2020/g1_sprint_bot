@@ -170,7 +170,7 @@ class GoogleHelper {
   static async getSheetNameByGid(gid) {
     try {
       const response = await this.gsapi.spreadsheets.get({ spreadsheetId: this.S_ID });
-      const sheet = response.data.sheets.find(s => s.properties.sheetId === gid);
+      const sheet = response.data.sheets.find(s => s.properties.sheetId == gid);
       return sheet ? sheet.properties.title : null;
     } catch (error) {
       console.error('❌ Ошибка при получении имени листа по GID:', error);
@@ -178,7 +178,102 @@ class GoogleHelper {
     }
   }
 
-  // Можно добавлять и другие вспомогательные методы, как writeRange, clearSheet и т.п.
+  /**
+   * Получить строку (A-J) по GID листа, где значение в столбце A заканчивается указанной подстрокой
+   * @param {number} gid — GID листа (sheetId)
+   * @param {string} substring — Подстрока для поиска в столбце A
+   * @returns {Promise<Array<string|number>|null>} Массив значений строки (A-J) или null, если строка не найдена
+   */
+  static async getRowBySubstringInA(gid, substring) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+      const rangeAddress = `${sheetName}!A:J`;
+      const response = await this.gsapi.spreadsheets.values.get({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress
+      });
+      const values = response.data.values || [];
+      for (const row of values) {
+        const cellA = row[0] || ''; // Значение в столбце A
+        if (typeof cellA === 'string' && cellA.endsWith(substring)) {
+          return row.slice(0, 10); // Возвращаем первые 10 столбцов (A-J)
+        }
+      }
+      console.log(`ℹ️ Строка с подстрокой "${substring}" в столбце A не найдена на листе с GID ${gid}`);
+      return null;
+    } catch (error) {
+      console.error(`❌ Ошибка при поиске строки с подстрокой "${substring}" в столбце A на листе с GID ${gid}:`, error);
+    }
+  }
+
+  /**
+ * Найти строку, где значение в столбце A заканчивается на substring, вернуть объект task и удалить эту строку
+ * @param {number} gid — GID листа (sheetId)
+ * @param {string} substring — Подстрока для поиска в столбце A
+ * @returns {Promise<Object|null>} Объект task с полями A–J или null, если строка не найдена
+ */
+  static async deleteRowBySubstringInA(gid, substring) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+
+      const rangeAddress = `${sheetName}!A:J`;
+      const response = await this.gsapi.spreadsheets.values.get({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress
+      });
+
+      const values = response.data.values || [];
+      const columnNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+
+      let rowIndex = 0;
+      for (const row of values) {
+        const cellA = row[0] || '';
+        if (typeof cellA === 'string' && cellA.endsWith(substring)) {
+          const task = {};
+          for (let i = 0; i < 10; i++) {
+            task[columnNames[i]] = row[i] ?? '';
+          }
+          task['sheetName'] = sheetName;
+          // Удаление строки
+          await this.gsapi.spreadsheets.batchUpdate({
+            spreadsheetId: this.S_ID,
+            resource: {
+              requests: [
+                {
+                  deleteDimension: {
+                    range: {
+                      sheetId: gid,
+                      dimension: 'ROWS',
+                      startIndex: rowIndex,
+                      endIndex: rowIndex + 1
+                    }
+                  }
+                }
+              ]
+            }
+          });
+
+          console.log(`🗑️ Строка успешно удалена с листа "${sheetName}". Task:`, task);
+          return task;
+        }
+        rowIndex++;
+      }
+
+      console.log(`ℹ️ Строка, заканчивающаяся на "${substring}", не найдена на листе "${sheetName}"`);
+      return null;
+    } catch (error) {
+      console.error(`❌ Ошибка при удалении строки с подстрокой "${substring}" в столбце A:`, error);
+      throw error;
+    }
+  }
+
+
 }
 
 module.exports = GoogleHelper;
