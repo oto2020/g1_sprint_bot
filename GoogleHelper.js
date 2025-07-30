@@ -386,7 +386,7 @@ class GoogleHelper {
    * @param {string} taskId — ID задачи для поиска в столбце A
    * @returns {Promise<string>} Сформированная HTML-ссылка или строка с ошибкой
    */
-  static async generateTaskLink(spreadsheetId, gid, taskId) {
+  static async generateTaskLink(gid, taskId) {
     try {
       const sheetName = await this.getSheetNameByGid(gid);
       if (!sheetName) {
@@ -416,7 +416,7 @@ class GoogleHelper {
       }
 
       // Формирование ссылки
-      const aHref = `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${gid}&range=B${taskRow}">${sheetName}, строка ${taskRow}</a>`;
+      const aHref = `<a href="https://docs.google.com/spreadsheets/d/${this.S_ID}/edit#gid=${gid}&range=B${taskRow}">${sheetName}, строка ${taskRow}</a>`;
       console.log(`✅ Ссылка сформирована: ${aHref}`);
       return aHref;
     } catch (error) {

@@ -183,7 +183,7 @@ const keyboard = {
 
             // Информируем, о том, что мы выбираем нового исполнителя задачи
             let taskText = tasks[`${chatId}@${messageId}`];
-            let aHref = await GoogleHelper.generateTaskLink(spreadsheetId, gid, taskId);
+            let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
             let newMessage = `✍️ Выбор нового исполнителя задачи:\n\n` +
                 `<b>${taskText}</b>\n\n` +
                 `${aHref}\n\n` +
@@ -225,7 +225,13 @@ const keyboard = {
             });
 
 
-        } else if (buttonAction === 'delete') {
+        } 
+        else if (buttonAction === 'back_to_task') {
+            let gid = param1;
+            let taskId = param2;
+            // воспроизводим задачу
+        }
+        else if (buttonAction === 'delete') {
             let gid = param1;
             let taskId = param2;
             let task = await GoogleHelper.deleteRowBySubstringInA(gid, taskId);
