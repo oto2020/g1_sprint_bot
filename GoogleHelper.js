@@ -379,6 +379,52 @@ class GoogleHelper {
     }
   }
 
+  /**
+   * Сформировать aHref ссылку на ячейку B в строке, где значение в столбце A равно taskId
+   * @param {string} spreadsheetId — ID таблицы
+   * @param {number} gid — GID листа (sheetId)
+   * @param {string} taskId — ID задачи для поиска в столбце A
+   * @returns {Promise<string>} Сформированная HTML-ссылка или строка с ошибкой
+   */
+  static async generateTaskLink(spreadsheetId, gid, taskId) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+
+      const rangeAddress = `${sheetName}!A:A`;
+      const response = await this.gsapi.spreadsheets.values.get({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress
+      });
+
+      const values = response.data.values || [];
+      let taskRow = null;
+
+      // Поиск строки с taskId в столбце A
+      for (let i = 0; i < values.length; i++) {
+        const cellA = values[i][0] || '';
+        if (cellA === taskId) {
+          taskRow = i + 1; // Номер строки (начиная с 1)
+          break;
+        }
+      }
+
+      if (!taskRow) {
+        throw new Error(`Задача с ID ${taskId} не найдена в столбце A на листе "${sheetName}"`);
+      }
+
+      // Формирование ссылки
+      const aHref = `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${gid}&range=B${taskRow}">${sheetName}, строка ${taskRow}</a>`;
+      console.log(`✅ Ссылка сформирована: ${aHref}`);
+      return aHref;
+    } catch (error) {
+      console.error(`❌ Ошибка при формировании ссылки для taskId "${taskId}" на листе с GID ${gid}:`, error);
+      throw error;
+    }
+  }
+
 
 }
 

@@ -141,16 +141,17 @@ const keyboard = {
             GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
 
             // Информируем, что задача поставлена
-            await TelegramHelper.editMessageText(
-                bot,
-                chatId,
-                messageId,
-                `✅ Задача поставлена:\n\n` +
+            let newMessage = `✅ Задача поставлена:\n\n` +
                 `<b>${taskText}</b>\n\n` +
                 `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
                 `<i>Используйте клавиатуру, чтобы изменить:\n` +
                 `Исполнителя / Источник,\n` +
-                `Срочность / Статус задачи</i>`,
+                `Срочность / Статус задачи</i>`;
+            await TelegramHelper.editMessageText(
+                bot,
+                chatId,
+                messageId,
+                newMessage,
                 'HTML',
                 true
             );
@@ -180,14 +181,49 @@ const keyboard = {
             let gid = param1;
             let taskId = param2;
 
-            let keyboardRow1 = responsibles.map(el => {
-                return { text: el, callback_data: `change_resp@${chatId}@${messageId}@${gid}@${el}` }
+            // Информируем, о том, что мы выбираем нового исполнителя задачи
+            let taskText = tasks[`${chatId}@${messageId}`];
+            let aHref = await GoogleHelper.generateTaskLink(spreadsheetId, gid, taskId);
+            let newMessage = `✍️ Выбор нового исполнителя задачи:\n\n` +
+                `<b>${taskText}</b>\n\n` +
+                `${aHref}\n\n` +
+                `<i>Используйте клавиатуру, чтобы изменить:\n` +
+                `Исполнителя</i>`;
+            await TelegramHelper.editMessageText(
+                bot,
+                chatId,
+                messageId,
+                newMessage,
+                'HTML',
+                true
+            );
+
+            let buttonsInRow = 4; // Количество кнопок в одном ряду
+            // Формируем кнопки по заданному числу в ряд
+            let keyboard = [];
+            for (let i = 0; i < responsibles.length; i += buttonsInRow) {
+                let row = responsibles.slice(i, i + buttonsInRow).map((resp, respIndex) => {
+                    return {
+                        text: resp,
+                        callback_data: `change_resp@${chatId}@${messageId}@${gid}@${taskId}@${respIndex}`
+                    };
+                });
+                keyboard.push(row);
+            }
+
+            // Добавляем последнюю строку с кнопкой "Назад"
+            keyboard.push([
+                {
+                    text: 'Назад',
+                    callback_data: `back_to_task@${chatId}@${messageId}@${gid}@${taskId}`
+                }
+            ]);
+
+            console.log(keyboard);
+            await TelegramHelper.updateTaskButtons(bot, chatId, messageId, {
+                inline_keyboard: keyboard
             });
-            let keyboardRow2 = [
-                { text: 'Назад', callback_data: `back_to_task@${chatId}@${messageId}@${gid}` }
-            ];
-            console.log(keyboardRow1);
-            await TelegramHelper.updateTaskButtons(bot, chatId, messageId, { inline_keyboard: [keyboardRow1, keyboardRow2] });
+
 
         } else if (buttonAction === 'delete') {
             let gid = param1;
