@@ -355,7 +355,7 @@ class GoogleHelper {
         throw new Error(`Лист с GID ${gid} не найден`);
       }
 
-      const ranges = [`${sheetName}!G2:G`, `${sheetName}!H2:H`, `${sheetName}!I2:I`];
+      const ranges = [`${sheetName}!A2:A`, `${sheetName}!G2:G`, `${sheetName}!H2:H`, `${sheetName}!I2:I`];
 
       const response = await this.gsapi.spreadsheets.values.batchGet({
         spreadsheetId: this.S_ID,
@@ -367,13 +367,14 @@ class GoogleHelper {
           .map(row => (row[0] || '').trim())
           .filter(value => value !== '');
 
-      const sources = getColumnValues(0);
-      const priorities = getColumnValues(1);
-      const statuses = getColumnValues(2);
+      const responsibles = getColumnValues(0);
+      const sources = getColumnValues(1);
+      const priorities = getColumnValues(2);
+      const statuses = getColumnValues(3);
 
-      return { sources, priorities, statuses };
+      return { responsibles, sources, priorities, statuses };
     } catch (error) {
-      console.error('❌ Ошибка при получении значений из столбцов G/H/I:', error);
+      console.error('❌ Ошибка при получении значений из столбцов A/G/H/I:', error);
       throw error;
     }
   }

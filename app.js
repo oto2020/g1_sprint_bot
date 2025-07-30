@@ -41,12 +41,14 @@ function getFormattedTimestamp() {
     const minutes = pad(now.getMinutes());
     const seconds = pad(now.getSeconds());
 
-    return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+    return `${day}.${month} ${hours}:${minutes}`;
 }
 
 const token = process.env.TELEGRAM_TOKEN;
 const spreadsheetId = process.env.SPREADSHEET_ID;
 const referenceBookGid = Number(process.env.REFERENCE_BOOK_GID);
+
+let responsibles, sources, priorities, statuses;    // из листа "Справочник"
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -86,8 +88,17 @@ const keyboard = {
     console.log('Текущий спринт:', currentSprintObjTitleAndGid);
     console.log('Следующий спринт:', nextSprintObjTitleAndGid);
 
-    let { sources, priorities, statuses } = await GoogleHelper.getSourcesPrioritiesStatusesFromColumns(referenceBookGid);
-    console.log(sources, priorities, statuses);
+    let tmp = await GoogleHelper.getSourcesPrioritiesStatusesFromColumns(referenceBookGid);
+
+    responsibles = tmp.responsibles;
+    sources = tmp.sources;
+    priorities = tmp.priorities;
+    statuses = tmp.statuses;
+    console.log(responsibles);
+    console.log(sources);
+    console.log(priorities);
+    console.log(statuses);
+
     console.log(' ///// БОТ ГОТОВ К РАБОТЕ /////// ');
 
     // // Заглушка !!!! УБРАТЬ И РАСКОММЕНТИРОВАТЬ ВЕРХНИЕ СТРОКИ
@@ -102,95 +113,98 @@ const keyboard = {
         const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
         await bot.answerCallbackQuery(query.id);
 
-        switch (buttonAction) {
-            // была нажата кнопка создания задачи
-            case 'create':
-                // актуализируем спринты для понимания предыдущего, текущего и следующего
-                lastSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getLastSprintNumber()} `).test(s.title));
-                currentSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getCurrentSprintNumber()} `).test(s.title));
-                nextSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getNextSprintNumber()} `).test(s.title));
+        if (buttonAction === 'create') {
+            // актуализируем спринты для понимания предыдущего, текущего и следующего
+            let lastSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getLastSprintNumber()} `).test(s.title));
+            let currentSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getCurrentSprintNumber()} `).test(s.title));
+            let nextSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getNextSprintNumber()} `).test(s.title));
 
-                // определяем в текущий или в следующий спринт
-                let sprintObj = param1 == 'toCurrent' ? currentSprintObjTitleAndGid : nextSprintObjTitleAndGid;
+            // определяем в текущий или в следующий спринт
+            let sprintObj = param1 === 'toCurrent' ? currentSprintObjTitleAndGid : nextSprintObjTitleAndGid;
 
-                // находим первую попавшуюся свободную строку
-                let firstEmptyRow = await GoogleHelper.findFirstEmptyRow(sprintObj.gid, 'C:E');
+            // находим первую попавшуюся свободную строку
+            let firstEmptyRow = await GoogleHelper.findFirstEmptyRow(sprintObj.gid, 'C:C');
 
-                // делаем запись в строку
-                let id = `${getFormattedTimestamp()}_${chatId}_${messageId}`;
-                let isCompleted = false;
-                let taskText = tasks[`${chatId}@${messageId}`]; // Достаем из кеша текст сообщения (задачи)
-                let responsibleName = users[chatId].department;
-                let sourceName = "Вне плана";
-                let priority = "⏳";
-                let linkB24 = "";
-                let comment = "";
-                let status = "Требует внимания ⚠️";
+            // делаем запись в строку
+            let taskId = `${getFormattedTimestamp()} ${messageId}`;
+            let isCompleted = false;
+            let taskText = tasks[`${chatId}@${messageId}`]; // Достаем из кеша текст сообщения (задачи)
+            let responsibleName = users[chatId].department;
+            let sourceName = "Вне плана";
+            let priority = "⏳";
+            let linkB24 = "";
+            let comment = "";
+            let status = "Требует внимания ⚠️";
 
-                // записываем строку целиком
-                let row = [id, isCompleted, taskText, responsibleName, sourceName, priority, linkB24, comment, status];
-                GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
+            // записываем строку целиком
+            let row = [taskId, isCompleted, taskText, responsibleName, sourceName, priority, linkB24, comment, status];
+            GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
 
-                // Информируем, что задача поставлена
-                await TelegramHelper.editMessageText(
-                    bot,
-                    chatId,
-                    messageId,
-                    `✅ Задача поставлена:\n\n` +
-                    `<b>${taskText}</b>\n\n` +
-                    `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
-                    `<i>Используйте клавиатуру, чтобы изменить:\n` +
-                    `Исполнителя / Источник,\n` +
-                    `Срочность / Статус задачи</i>`,
-                    'HTML',
-                    true
-                );
+            // Информируем, что задача поставлена
+            await TelegramHelper.editMessageText(
+                bot,
+                chatId,
+                messageId,
+                `✅ Задача поставлена:\n\n` +
+                `<b>${taskText}</b>\n\n` +
+                `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
+                `<i>Используйте клавиатуру, чтобы изменить:\n` +
+                `Исполнителя / Источник,\n` +
+                `Срочность / Статус задачи</i>`,
+                'HTML',
+                true
+            );
 
-                const keyboardForCreatedTask = {
-                    inline_keyboard: [
-                        [
-                            { text: `${responsibleName}`, callback_data: `change_resp@${chatId}@${messageId}` },
-                            { text: `${sourceName}`, callback_data: `change_src@${chatId}@${messageId}` },
-                        ],
-                        [
-                            { text: `${priority}`, callback_data: `change_priority@${chatId}@${messageId}` },
-                            { text: `${status}`, callback_data: `change_status@${chatId}@${messageId}` },
-                        ],
-                        [
-                            { text: '❌ Удалить задачу', callback_data: `delete@${chatId}@${messageId}@${sprintObj.gid}` },
-                        ]
+            const keyboardForCreatedTask = {
+                inline_keyboard: [
+                    [
+                        { text: `${responsibleName}`, callback_data: `select_resp@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
+                        { text: `${sourceName}`, callback_data: `select_src@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
+                    ],
+                    [
+                        { text: `${priority}`, callback_data: `select_priority@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
+                        { text: `${status}`, callback_data: `select_status@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
+                    ],
+                    [
+                        { text: '❌ Удалить задачу', callback_data: `delete@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
                     ]
-                };
+                ]
+            };
 
-                await TelegramHelper.updateTaskButtons(bot, chatId, messageId, keyboardForCreatedTask);
-                break;
+            await TelegramHelper.updateTaskButtons(bot, chatId, messageId, keyboardForCreatedTask);
+        } else if (buttonAction === 'edit') {
+            await bot.sendMessage(chatId, `Редактирование задачи ${chatId}@${messageId}\nTODO: реализовать редактирование задачи`);
+        } else if (buttonAction === 'cancel') {
+            await bot.deleteMessage(chatId, messageId);
+        } else if (buttonAction === 'select_resp') {
+            let gid = param1;
+            let taskId = param2;
 
-            case 'edit':
-                await bot.sendMessage(chatId, `Редактирование задачи ${chatId}@${messageId}\nTODO: реализовать редактирование задачи`);
-                break;
+            let keyboardRow1 = responsibles.map(el => {
+                return { text: el, callback_data: `change_resp@${chatId}@${messageId}@${gid}@${el}` }
+            });
+            let keyboardRow2 = [
+                { text: 'Назад', callback_data: `back_to_task@${chatId}@${messageId}@${gid}` }
+            ];
+            console.log(keyboardRow1);
+            await TelegramHelper.updateTaskButtons(bot, chatId, messageId, { inline_keyboard: [keyboardRow1, keyboardRow2] });
 
-            case 'cancel':
-                await bot.deleteMessage(chatId, messageId);
-                break;
-
-            // Была нажата кнопка удаления задачи
-            case 'delete':
-                let gid = param1;
-                let idSubstring = `_${chatId}_${messageId}`;
-                let task = await GoogleHelper.deleteRowBySubstringInA(gid, idSubstring);
-                await bot.deleteMessage(chatId, messageId);
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Задача удалена:\n\n` + 
-                    `<b>${task.C}</b>\n\n` + 
-                    `Ответственный: ${task.D}\n` + 
-                    `Источник: ${task.E}\n` + 
-                    `Приоритет: ${task.F}\n` + 
-                    `Комментарий: ${task.H}\n` + 
-                    `Статус: ${task.I}\n\n` +
-                    `${task.sheetName}`,
-                    { parse_mode: 'HTML' });
-                break;
+        } else if (buttonAction === 'delete') {
+            let gid = param1;
+            let taskId = param2;
+            let task = await GoogleHelper.deleteRowBySubstringInA(gid, taskId);
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(
+                chatId,
+                `❌ Задача удалена:\n\n` +
+                `<b>${task.C}</b>\n\n` +
+                `Ответственный: ${task.D}\n` +
+                `Источник: ${task.E}\n` +
+                `Приоритет: ${task.F}\n` +
+                `Комментарий: ${task.H}\n` +
+                `Статус: ${task.I}\n\n` +
+                `${task.sheetName}`,
+                { parse_mode: 'HTML' });
         }
     });
 
