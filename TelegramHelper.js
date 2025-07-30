@@ -1,5 +1,12 @@
 // TelegramHelper.js
+
 class TelegramHelper {
+
+  static bot;
+
+  static init(bot) {
+    this.bot = bot;
+  }
   /**
    * Отправляет markdownV2-сообщение без кнопок и возвращает chatId и messageId
    * @param {TelegramBot} bot - экземпляр Telegram бота
@@ -14,14 +21,14 @@ class TelegramHelper {
     return { chatId: msg.chat.id, messageId: msg.message_id };
   }
 
-  static async updateTaskButtons(bot, chatId, messageId, inlineKeyboard) {
+  static async updateTaskButtons(chatId, messageId, inlineKeyboard) {
     // console.log(`Обновляю клавиатуру ${chatId}@${messageId}`);
     // console.log(inlineKeyboard?.inline_keyboard);
 
     try {
       // 1‑й аргумент — только клавиатура
       // 2‑й аргумент — куда её поставить
-      await bot.editMessageReplyMarkup(
+      await this.bot.editMessageReplyMarkup(
         { inline_keyboard: inlineKeyboard.inline_keyboard },
         { chat_id: chatId, message_id: messageId }
       );
@@ -38,15 +45,14 @@ class TelegramHelper {
 
   /**
  * Обновляет текст существующего сообщения
- * @param {TelegramBot} bot - экземпляр Telegram бота
  * @param {number} chatId - ID чата
  * @param {number} messageId - ID сообщения
  * @param {string} newText - Новый текст сообщения (в MarkdownV2 или HTML)
  * @param {'MarkdownV2' | 'HTML'} [parseMode='MarkdownV2'] - Режим парсинга
  */
-  static async editMessageText(bot, chatId, messageId, newText, parseMode = 'MarkdownV2', disableWebPagePreview = false) {
+  static async editMessageText(chatId, messageId, newText, parseMode = 'MarkdownV2', disableWebPagePreview = false) {
     try {
-      await bot.editMessageText(newText, {
+      await this.bot.editMessageText(newText, {
         chat_id: chatId,
         message_id: messageId,
         parse_mode: parseMode,

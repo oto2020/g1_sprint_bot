@@ -4,45 +4,9 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const GoogleHelper = require('./GoogleHelper');
 const TelegramHelper = require('./TelegramHelper');
-const fs = require('fs');
-const path = require('path');
-const USERS_FILE_PATH = path.join(__dirname, 'users.json');
-function loadUsersFromFile() {
-    if (fs.existsSync(USERS_FILE_PATH)) {
-        try {
-            const data = fs.readFileSync(USERS_FILE_PATH, 'utf-8');
-            return JSON.parse(data);
-        } catch (err) {
-            console.error('Ошибка чтения users.json:', err);
-            return {};
-        }
-    }
-    return {};
-}
+const BotController = require('./BotController');
+const StorageController = require('./StorageController');
 
-function saveUsersToFile(users) {
-    try {
-        fs.writeFileSync(USERS_FILE_PATH, JSON.stringify(users, null, 2), 'utf-8');
-    } catch (err) {
-        console.error('Ошибка записи в users.json:', err);
-    }
-}
-
-function getFormattedTimestamp() {
-    const now = new Date();
-
-    const pad = (n) => String(n).padStart(2, '0');
-
-    const year = now.getFullYear();
-    const month = pad(now.getMonth() + 1);
-    const day = pad(now.getDate());
-
-    const hours = pad(now.getHours());
-    const minutes = pad(now.getMinutes());
-    const seconds = pad(now.getSeconds());
-
-    return `${day}.${month} ${hours}:${minutes}`;
-}
 
 const token = process.env.TELEGRAM_TOKEN;
 const spreadsheetId = process.env.SPREADSHEET_ID;
@@ -51,10 +15,7 @@ const referenceBookGid = Number(process.env.REFERENCE_BOOK_GID);
 let responsibles, sources, priorities, statuses;    // из листа "Справочник"
 
 const bot = new TelegramBot(token, { polling: true });
-
-let users = loadUsersFromFile();    // id: chatId
-const tasks = {};                // id: chatId@messageId
-
+TelegramHelper.init(bot); // теперь бот доступен из TelegramHelper.bot
 
 // Информация по спринтам 
 let lastSprintObjTitleAndGid;
@@ -114,65 +75,7 @@ const keyboard = {
         await bot.answerCallbackQuery(query.id);
 
         if (buttonAction === 'create') {
-            // актуализируем спринты для понимания предыдущего, текущего и следующего
-            let lastSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getLastSprintNumber()} `).test(s.title));
-            let currentSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getCurrentSprintNumber()} `).test(s.title));
-            let nextSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getNextSprintNumber()} `).test(s.title));
-
-            // определяем в текущий или в следующий спринт
-            let sprintObj = param1 === 'toCurrent' ? currentSprintObjTitleAndGid : nextSprintObjTitleAndGid;
-
-            // находим первую попавшуюся свободную строку
-            let firstEmptyRow = await GoogleHelper.findFirstEmptyRow(sprintObj.gid, 'C:C');
-
-            // делаем запись в строку
-            let taskId = `${getFormattedTimestamp()} ${messageId}`;
-            let isCompleted = false;
-            let taskText = tasks[`${chatId}@${messageId}`]; // Достаем из кеша текст сообщения (задачи)
-            let responsibleName = users[chatId].department;
-            let sourceName = "Вне плана";
-            let priority = "⏳";
-            let linkB24 = "";
-            let comment = "";
-            let status = "Требует внимания ⚠️";
-
-            // записываем строку целиком
-            let row = [taskId, isCompleted, taskText, responsibleName, sourceName, priority, linkB24, comment, status];
-            GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
-
-            // Информируем, что задача поставлена
-            let newMessage = `✅ Задача поставлена:\n\n` +
-                `<b>${taskText}</b>\n\n` +
-                `<a href="https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
-                `<i>Используйте клавиатуру, чтобы изменить:\n` +
-                `Исполнителя / Источник,\n` +
-                `Срочность / Статус задачи</i>`;
-            await TelegramHelper.editMessageText(
-                bot,
-                chatId,
-                messageId,
-                newMessage,
-                'HTML',
-                true
-            );
-
-            const keyboardForCreatedTask = {
-                inline_keyboard: [
-                    [
-                        { text: `${responsibleName}`, callback_data: `select_resp@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-                        { text: `${sourceName}`, callback_data: `select_src@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-                    ],
-                    [
-                        { text: `${priority}`, callback_data: `select_priority@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-                        { text: `${status}`, callback_data: `select_status@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-                    ],
-                    [
-                        { text: '❌ Удалить задачу', callback_data: `delete@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-                    ]
-                ]
-            };
-
-            await TelegramHelper.updateTaskButtons(bot, chatId, messageId, keyboardForCreatedTask);
+            await BotController.createTask(query);
         } else if (buttonAction === 'edit') {
             await bot.sendMessage(chatId, `Редактирование задачи ${chatId}@${messageId}\nTODO: реализовать редактирование задачи`);
         } else if (buttonAction === 'cancel') {
@@ -182,7 +85,7 @@ const keyboard = {
             let taskId = param2;
 
             // Информируем, о том, что мы выбираем нового исполнителя задачи
-            let taskText = tasks[`${chatId}@${messageId}`];
+            let taskText = StorageController.tasks[`${chatId}@${messageId}`];
             let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
             let newMessage = `✍️ Выбор нового исполнителя задачи:\n\n` +
                 `<b>${taskText}</b>\n\n` +
@@ -220,7 +123,7 @@ const keyboard = {
             ]);
 
             console.log(keyboard);
-            await TelegramHelper.updateTaskButtons(bot, chatId, messageId, {
+            await TelegramHelper.updateTaskButtons(chatId, messageId, {
                 inline_keyboard: keyboard
             });
 
@@ -266,7 +169,7 @@ const keyboard = {
         if (msg.contact) return;
 
         // ✅ Обработка обычного пользовательского ввода
-        if (!users[chatId]) {
+        if (!StorageController.users[chatId]) {
             return bot.sendMessage(chatId, 'Пожалуйста, поделись своим номером через /start');
         }
         // console.table(users);
@@ -275,7 +178,7 @@ const keyboard = {
         let taskText = msg.text;
         let newMsg = await bot.sendMessage(chatId, `🧐 Постановка задачи:\n${msg.text}`);
         let messageId = newMsg.message_id;
-        tasks[`${chatId}@${messageId}`] = taskText;
+        StorageController.tasks[`${chatId}@${messageId}`] = taskText;
 
         // опции с клавиатурой
         const keyboard = {
@@ -289,7 +192,7 @@ const keyboard = {
                 ]]
         };
 
-        await TelegramHelper.updateTaskButtons(bot, chatId, messageId, keyboard)
+        await TelegramHelper.updateTaskButtons(chatId, messageId, keyboard)
     });
 
 
@@ -298,13 +201,13 @@ const keyboard = {
         const chatId = msg.chat.id;
 
         // если пользователь уже известен
-        if (users[chatId]) {
+        if (StorageController.users[chatId]) {
             console.log(`Пользователь запустил бота и он уже известен: `);
-            console.log(users[chatId]);
+            console.log(StorageController.users[chatId]);
             bot.sendMessage(chatId,
-                `👋 Привет!\n\nТы из подразделения: <b>${users[chatId].department}</b>\n` +
-                `📞 Номер: <b>${users[chatId].number}</b>\n` +
-                `📧 Email: <b>${users[chatId].email || 'не указан'}</b>\n\n` +
+                `👋 Привет!\n\nТы из подразделения: <b>${StorageController.users[chatId].department}</b>\n` +
+                `📞 Номер: <b>${StorageController.users[chatId].number}</b>\n` +
+                `📧 Email: <b>${StorageController.users[chatId].email || 'не указан'}</b>\n\n` +
                 `Чтобы поставить задачу просто напиши её боту`,
                 { parse_mode: 'HTML' }
             );
@@ -319,9 +222,9 @@ const keyboard = {
         const chatId = msg.chat.id;
 
         // если пользователь уже известен
-        if (users[chatId]) {
+        if (StorageController.users[chatId]) {
             console.log(`Пользователь поделился контактом, но он уже известен: `);
-            console.log(users[chatId]);
+            console.log(StorageController.users[chatId]);
         }
 
         try {
@@ -348,12 +251,12 @@ const keyboard = {
                 );
 
                 // пользователь найден, запоминаем его
-                users[chatId] = {
+                StorageController.users[chatId] = {
                     department, number, email, chatId
                 }
                 console.log(`Сохранили пользователя: `);
-                console.log(users[chatId]);
-                saveUsersToFile(users);
+                console.log(StorageController.users[chatId]);
+                StorageController.saveUsersToFile();
 
 
             } else {
