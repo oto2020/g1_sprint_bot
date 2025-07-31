@@ -22,7 +22,7 @@ class BotController {
   }
 
   /**
-   * Удаляет сообщение по chatId и messageId
+   * создает задачу
    */
   static async createTask(query) {
     try {
@@ -83,6 +83,20 @@ class BotController {
       };
 
       await TelegramHelper.updateTaskButtons(chatId, messageId, keyboardForCreatedTask);
+
+    } catch (err) {
+      console.error(`⚠️ Ошибка при выполнении createTask ⚠️\n`, err.message);
+      // throw err;
+    }
+  }
+
+
+  static async methodTemplate(query) {
+    try {
+      const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
+
+      // актуализируем спринты для понимания предыдущего, текущего и следующего
+      let sheets = await GoogleHelper.getAllSheetNamesAndGids();
 
     } catch (err) {
       console.error(`⚠️ Ошибка при выполнении createTask ⚠️\n`, err.message);
