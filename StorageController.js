@@ -32,6 +32,11 @@ class StorageController {
     
     static users = this.loadUsersFromFile();    // id: chatId
     static tasks = {};                // id: chatId@messageId
+    // для кнопок
+    static responsibles = {};
+    static sources = {};
+    static priorities = {};
+    static statuses = {};
 };
 
 module.exports = StorageController;

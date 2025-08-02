@@ -8,57 +8,29 @@ const BotController = require('./BotController');
 const StorageController = require('./StorageController');
 
 
-const token = process.env.TELEGRAM_TOKEN;
-const spreadsheetId = process.env.SPREADSHEET_ID;
-const referenceBookGid = Number(process.env.REFERENCE_BOOK_GID);
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const REFERENCE_BOOK_GID = Number(process.env.REFERENCE_BOOK_GID);
 
-let responsibles, sources, priorities, statuses;    // из листа "Справочник"
-
-const bot = new TelegramBot(token, { polling: true });
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 TelegramHelper.init(bot); // теперь бот доступен из TelegramHelper.bot
 
-// Информация по спринтам 
-let lastSprintObjTitleAndGid;
-let currentSprintObjTitleAndGid; // {title: 'спринт 29 14.07-20.07', gid: 324521214}
-let nextSprintObjTitleAndGid;
-
-const keyboard = {
-    reply_markup: {
-        one_time_keyboard: true,
-        keyboard: [[{
-            text: 'Нажми на меня 📞',
-            request_contact: true
-        }]]
-    }
-};
 
 (async () => {
     // // Обязательно инициализируем Google API перед обработкой команд
-    await GoogleHelper.init(spreadsheetId);
+    await GoogleHelper.init(SPREADSHEET_ID);
 
+    // Просто так получаем список листов в таблице
     let sheets = await GoogleHelper.getAllSheetNamesAndGids();
     console.log('📄 Список листов в таблице:');
     console.table(sheets);
 
-    // актуализируем спринты для понимания предыдущего, текущего и следующего
-    lastSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getLastSprintNumber()} `).test(s.title));
-    currentSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getCurrentSprintNumber()} `).test(s.title));
-    nextSprintObjTitleAndGid = sheets.find(s => new RegExp(`спринт ${GoogleHelper.getNextSprintNumber()} `).test(s.title));
-
-    console.log('Прошлый спринт:', lastSprintObjTitleAndGid);
-    console.log('Текущий спринт:', currentSprintObjTitleAndGid);
-    console.log('Следующий спринт:', nextSprintObjTitleAndGid);
-
-    let tmp = await GoogleHelper.getSourcesPrioritiesStatusesFromColumns(referenceBookGid);
-
-    responsibles = tmp.responsibles;
-    sources = tmp.sources;
-    priorities = tmp.priorities;
-    statuses = tmp.statuses;
-    console.log(responsibles);
-    console.log(sources);
-    console.log(priorities);
-    console.log(statuses);
+    // Заливаем список кнопок с отв./ист./приор./статусами в StorageController
+    let tmp = await GoogleHelper.getSourcesPrioritiesStatusesFromColumns(REFERENCE_BOOK_GID);
+    StorageController.responsibles = tmp.responsibles;
+    StorageController.sources = tmp.sources;
+    StorageController.priorities = tmp.priorities;
+    StorageController.statuses = tmp.statuses;
 
     console.log(' ///// БОТ ГОТОВ К РАБОТЕ /////// ');
 
@@ -71,85 +43,32 @@ const keyboard = {
     // }
 
     bot.on('callback_query', async (query) => {
-        const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
+        const [action] = query.data.split('@');
         await bot.answerCallbackQuery(query.id);
 
-        if (buttonAction === 'create') {
+        if (action === 'createTask') {
+            // создание задачи в этот или следующий спринт
             await BotController.createTask(query);
-        } else if (buttonAction === 'edit') {
-            await bot.sendMessage(chatId, `Редактирование задачи ${chatId}@${messageId}\nTODO: реализовать редактирование задачи`);
-        } else if (buttonAction === 'cancel') {
-            await bot.deleteMessage(chatId, messageId);
-        } else if (buttonAction === 'select_resp') {
-            let gid = param1;
-            let taskId = param2;
-
-            // Информируем, о том, что мы выбираем нового исполнителя задачи
-            let taskText = StorageController.tasks[`${chatId}@${messageId}`];
-            let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
-            let newMessage = `✍️ Выбор нового исполнителя задачи:\n\n` +
-                `<b>${taskText}</b>\n\n` +
-                `${aHref}\n\n` +
-                `<i>Используйте клавиатуру, чтобы изменить:\n` +
-                `Исполнителя</i>`;
-            await TelegramHelper.editMessageText(
-                bot,
-                chatId,
-                messageId,
-                newMessage,
-                'HTML',
-                true
-            );
-
-            let buttonsInRow = 4; // Количество кнопок в одном ряду
-            // Формируем кнопки по заданному числу в ряд
-            let keyboard = [];
-            for (let i = 0; i < responsibles.length; i += buttonsInRow) {
-                let row = responsibles.slice(i, i + buttonsInRow).map((resp, respIndex) => {
-                    return {
-                        text: resp,
-                        callback_data: `change_resp@${chatId}@${messageId}@${gid}@${taskId}@${respIndex}`
-                    };
-                });
-                keyboard.push(row);
-            }
-
-            // Добавляем последнюю строку с кнопкой "Назад"
-            keyboard.push([
-                {
-                    text: 'Назад',
-                    callback_data: `back_to_task@${chatId}@${messageId}@${gid}@${taskId}`
-                }
-            ]);
-
-            console.log(keyboard);
-            await TelegramHelper.updateTaskButtons(chatId, messageId, {
-                inline_keyboard: keyboard
-            });
-
-
-        } 
-        else if (buttonAction === 'back_to_task') {
-            let gid = param1;
-            let taskId = param2;
-            // воспроизводим задачу
         }
-        else if (buttonAction === 'delete') {
-            let gid = param1;
-            let taskId = param2;
-            let task = await GoogleHelper.deleteRowBySubstringInA(gid, taskId);
-            await bot.deleteMessage(chatId, messageId);
-            await bot.sendMessage(
-                chatId,
-                `❌ Задача удалена:\n\n` +
-                `<b>${task.C}</b>\n\n` +
-                `Ответственный: ${task.D}\n` +
-                `Источник: ${task.E}\n` +
-                `Приоритет: ${task.F}\n` +
-                `Комментарий: ${task.H}\n` +
-                `Статус: ${task.I}\n\n` +
-                `${task.sheetName}`,
-                { parse_mode: 'HTML' });
+
+        if (action === 'cancelCreation') {
+            // отмена создания задачи, удаление сообщения
+            await BotController.cancelCreation(query);
+        }
+
+        if (action === 'showResp') {
+            // показать клавиатуру с выбором ответственных
+            await BotController.showResp(query);
+        }
+
+        if (action === 'backToTask') {
+            // вернуться к задаче из клавиатуры с отв./исп./приор./статусом
+            await BotController.backToTask(query);
+        }
+
+        if (action === 'deleteTask') {
+            // удалить задачу
+            await BotController.deleteTask(query);
         }
     });
 
@@ -184,11 +103,11 @@ const keyboard = {
         const keyboard = {
             inline_keyboard: [
                 [
-                    { text: '🎯 В этот спринт', callback_data: `create@${chatId}@${messageId}@toCurrent` },
-                    { text: '↩️ В следующий спринт', callback_data: `create@${chatId}@${messageId}@toNext` },
+                    { text: '🎯 В этот спринт', callback_data: `createTask@${chatId}@${messageId}@toCurrent` },
+                    { text: '↩️ В следующий спринт', callback_data: `createTask@${chatId}@${messageId}@toNext` },
                 ],
                 [
-                    { text: '✖️ Отмена', callback_data: `cancel@${chatId}@${messageId}` }
+                    { text: '✖️ Отмена', callback_data: `cancelCreation@${chatId}@${messageId}` }
                 ]]
         };
 
@@ -212,6 +131,15 @@ const keyboard = {
                 { parse_mode: 'HTML' }
             );
         }
+        const keyboard = {
+            reply_markup: {
+                one_time_keyboard: true,
+                keyboard: [[{
+                    text: 'Нажми на меня 📞',
+                    request_contact: true
+                }]]
+            }
+        };
         bot.sendMessage(chatId, 'Чтобы актуализировать данные из гугл-таблицы нажмите 📞 в клавиатуре бота', keyboard);
 
     });
@@ -228,11 +156,11 @@ const keyboard = {
         }
 
         try {
-            const sheetName = await GoogleHelper.getSheetNameByGid(referenceBookGid);
+            const sheetName = await GoogleHelper.getSheetNameByGid(REFERENCE_BOOK_GID);
             if (!sheetName) throw new Error('Лист с заданным GID не найден');
 
             const res = await GoogleHelper.gsapi.spreadsheets.values.get({
-                spreadsheetId,
+                SPREADSHEET_ID,
                 range: `${sheetName}!A2:C`
             });
 
@@ -243,7 +171,7 @@ const keyboard = {
             if (match) {
                 const [department, number, email] = match.row;
 
-                await GoogleHelper.writeToRange(referenceBookGid, `D${index + 2}`, [[chatId]]);
+                await GoogleHelper.writeToRange(REFERENCE_BOOK_GID, `D${index + 2}`, [[chatId]]);
                 bot.sendMessage(chatId,
                     `👋 Привет!\n\nТы из подразделения: <b>${department}</b>\n📞 Номер: <b>${number}</b>\n📧 Email: <b>${email || 'не указан'}</b>\n\n` +
                     `Чтобы поставить задачу просто напиши её боту`,

@@ -50,7 +50,7 @@ class TelegramHelper {
  * @param {string} newText - Новый текст сообщения (в MarkdownV2 или HTML)
  * @param {'MarkdownV2' | 'HTML'} [parseMode='MarkdownV2'] - Режим парсинга
  */
-  static async editMessageText(chatId, messageId, newText, parseMode = 'MarkdownV2', disableWebPagePreview = false) {
+  static async editMessageText(chatId, messageId, newText, parseMode = 'HTML', disableWebPagePreview = true) {
     try {
       await this.bot.editMessageText(newText, {
         chat_id: chatId,
