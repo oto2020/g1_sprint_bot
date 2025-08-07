@@ -61,9 +61,9 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
             await BotController.showResp(query);
         }
 
-        if (action === 'backToTask') {
-            // вернуться к задаче из клавиатуры с отв./исп./приор./статусом
-            await BotController.backToTask(query);
+        if (action === 'showTask') {
+            // показать задачу с клавиатурой с отв./исп./приор./статусом
+            await BotController.showTask(query);
         }
 
         if (action === 'deleteTask') {
@@ -160,7 +160,7 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
             if (!sheetName) throw new Error('Лист с заданным GID не найден');
 
             const res = await GoogleHelper.gsapi.spreadsheets.values.get({
-                SPREADSHEET_ID,
+                spreadsheetId: SPREADSHEET_ID,
                 range: `${sheetName}!A2:C`
             });
 
@@ -192,6 +192,7 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
             }
 
         } catch (error) {
+            // throw error;
             console.error('Ошибка при обработке контакта:', error);
             bot.sendMessage(chatId, '🚨 Произошла ошибка при проверке номера. Попробуй позже.');
         }

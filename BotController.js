@@ -53,13 +53,7 @@ class BotController {
         `<i>Используйте клавиатуру, чтобы изменить:\n` +
         `Исполнителя / Источник,\n` +
         `Срочность / Статус задачи</i>`;
-      await TelegramHelper.editMessageText(
-        chatId,
-        messageId,
-        newMessage,
-        'HTML',
-        true
-      );
+      await TelegramHelper.editMessageText(chatId, messageId, newMessage);
 
       const keyboardForCreatedTask = {
         inline_keyboard: [
@@ -116,11 +110,11 @@ class BotController {
         keyboard.push(row);
       }
 
-      // Добавляем последнюю строку с кнопкой "Назад"
+      // Добавляем последнюю строку с кнопкой "Назад" // this значит будет перерисовано это сообщение, а не будет выслано новое
       keyboard.push([
         {
           text: 'Назад',
-          callback_data: `backToTask@${chatId}@${messageId}@${gid}@${taskId}`
+          callback_data: `showTask@${chatId}@${messageId}@${gid}@${taskId}@thisMsg`
         }
       ]);
 
@@ -162,15 +156,56 @@ class BotController {
   }
 
 
-  static async backToTask(query) {
+  static async showTask(query) {
     try {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
 
-      // актуализируем спринты для понимания предыдущего, текущего и следующего
-      let sheets = await GoogleHelper.getAllSheetNamesAndGids();
+
+
+      let gid = param1;
+      let taskId = param2;
+      let isThisMessage = param3 === 'thisMsg';
+
+      // Получаем задачу по id
+      let task = await GoogleHelper.getTaskById(gid, taskId);
+
+      // ft это fromTable
+      let [ftTaskId, ftIsCompleted, ftTaskText, ftResponsibleName, ftSourceName, ftPriority, ftB24link, ftComment, ftStatus, ftPenalty] = Object.values(task);
+      // Информируем, о том, что мы выбираем нового исполнителя задачи
+      let taskText = StorageController.tasks[`${chatId}@${messageId}`];
+      let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
+      let newMessage = `👀 Задача:\n\n` +
+        `<b>${taskText}</b>\n\n` +
+        `${aHref}\n\n` +
+        `<i>Используйте клавиатуру, чтобы изменить:\n` +
+        `Исполнителя / Источник,\n` +
+        `Срочность / Статус задачи</i>`;
+
+      const keyboardForCreatedTask = {
+        inline_keyboard: [
+          [
+            { text: `${ftResponsibleName}`, callback_data: `showResp@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${ftSourceName}`, callback_data: `showSrc@${chatId}@${messageId}@${gid}@${taskId}` },
+          ],
+          [
+            { text: `${ftPriority}`, callback_data: `showPriority@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${ftStatus}`, callback_data: `showStatus@${chatId}@${messageId}@${gid}@${taskId}` },
+          ],
+          [
+            { text: '❌ Удалить задачу', callback_data: `deleteTask@${chatId}@${messageId}@${gid}@${taskId}` },
+          ]
+        ]
+      };
+
+      // если нужно изменить текущее сообщение
+      if (isThisMessage) {
+        await TelegramHelper.editMessageText(chatId, messageId, newMessage);
+        await TelegramHelper.updateTaskButtons(chatId, messageId, keyboardForCreatedTask);
+      }
+
 
     } catch (err) {
-      console.error(`⚠️ Ошибка при выполнении НАПИСАТЬ НАЗВАНИЕ МЕТОДА !!! ⚠️\n`, err.message);
+      console.error(`⚠️ Ошибка при выполнении showTask ⚠️\n`, err.message);
       // throw err;
     }
   }

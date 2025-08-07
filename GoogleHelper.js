@@ -275,6 +275,51 @@ class GoogleHelper {
 
 
   /**
+ * Найти строку, где значение в столбце A заканчивается на substring и вернуть объект task
+ * @param {number} gid — GID листа (sheetId)
+ * @param {string} substring — Подстрока для поиска в столбце A
+ * @returns {Promise<Object|null>} Объект task с полями A–J или null, если строка не найдена
+ */
+  static async getTaskById(gid, substring) {
+    try {
+      const sheetName = await this.getSheetNameByGid(gid);
+      if (!sheetName) {
+        throw new Error(`Лист с GID ${gid} не найден`);
+      }
+
+      const rangeAddress = `${sheetName}!A:J`;
+      const response = await this.gsapi.spreadsheets.values.get({
+        spreadsheetId: this.S_ID,
+        range: rangeAddress
+      });
+
+      const values = response.data.values || [];
+      const columnNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+
+      for (const row of values) {
+        const cellA = row[0] || '';
+        if (typeof cellA === 'string' && cellA.endsWith(substring)) {
+          const task = {};
+          for (let i = 0; i < 10; i++) {
+            task[columnNames[i]] = row[i] ?? '';
+          }
+          task['sheetName'] = sheetName;
+
+          // console.log(`✅ Найдена строка, заканчивающаяся на "${substring}" в листе "${sheetName}". Task:`, task);
+          return task;
+        }
+      }
+
+      // console.log(`ℹ️ Строка, заканчивающаяся на "${substring}", не найдена на листе "${sheetName}"`);
+      return null;
+    } catch (error) {
+      console.error(`❌ Ошибка при поиске строки с подстрокой "${substring}" в столбце A:`, error);
+      throw error;
+    }
+  }
+
+
+  /**
  * Найти строку, где значение в столбце A заканчивается на substring,
  * изменить значение в указанной ячейке (по имени столбца) и вернуть объект task до изменения
  * @param {number} gid — GID листа (sheetId)
