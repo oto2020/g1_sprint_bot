@@ -260,7 +260,20 @@ class GoogleHelper {
           });
 
           console.log(`🗑️ Строка успешно удалена с листа "${sheetName}". Task:`, task);
-          return task;
+
+          let result = {
+            sheetName: task['sheetName'],
+            id: task.A,
+            isCompleted: task.B,
+            name: task.C,
+            responsible: task.D,
+            source: task.E,
+            priority: task.F,
+            comment: task.H,
+            status: task.I
+          }
+
+          return result;
         }
         rowIndex++;
       }
@@ -306,7 +319,20 @@ class GoogleHelper {
           task['sheetName'] = sheetName;
 
           // console.log(`✅ Найдена строка, заканчивающаяся на "${substring}" в листе "${sheetName}". Task:`, task);
-          return task;
+
+          let result = {
+            sheetName: task['sheetName'],
+            id: task.A,
+            isCompleted: task.B,
+            name: task.C,
+            responsible: task.D,
+            source: task.E,
+            priority: task.F,
+            comment: task.H,
+            status: task.I
+          }
+
+          return result;
         }
       }
 

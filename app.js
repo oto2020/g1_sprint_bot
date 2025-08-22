@@ -56,9 +56,15 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
             await BotController.cancelCreation(query);
         }
 
+        //  ----------- ПОКАЗ КНОПОК ДЛЯ ВЫБОРА - ИЗМЕНЕНИЯ ЗАДАЧИ ------------  //
         if (action === 'showResp') {
             // показать клавиатуру с выбором ответственных
             await BotController.showResp(query);
+        }
+
+        if (action === 'showSrc') {
+            // показать клавиатуру с выбором источников(постановщиков)
+            await BotController.showSrc(query);
         }
 
         if (action === 'showTask') {

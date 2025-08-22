@@ -79,6 +79,7 @@ class BotController {
     }
   }
 
+  // Выдает задачу и кнопки с ответственными
   static async showResp(query) {
     try {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
@@ -129,6 +130,59 @@ class BotController {
     }
   }
 
+
+  // Выдает задачу и кнопки с ответственными
+  static async showSrc(query) {
+    try {
+      const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
+
+      let gid = param1;
+      let taskId = param2;
+
+      // Информируем, о том, что мы выбираем нового исполнителя задачи
+      let taskText = StorageController.tasks[`${chatId}@${messageId}`];
+      let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
+      let newMessage = `✍️ Выбор источника (постановщика) задачи:\n\n` +
+        `<b>${taskText}</b>\n\n` +
+        `${aHref}\n\n` +
+        `<i>Используйте клавиатуру, чтобы изменить:\n` +
+        `Исполнителя</i>`;
+      await TelegramHelper.editMessageText(chatId, messageId, newMessage);
+
+      let buttonsInRow = 4; // Количество кнопок в одном ряду
+      // Формируем кнопки по заданному числу в ряд
+      let keyboard = [];
+      let { sources } = StorageController;
+      for (let i = 0; i < sources.length; i += buttonsInRow) {
+        let row = sources.slice(i, i + buttonsInRow).map((resp, respIndex) => {
+          return {
+            text: resp,
+            callback_data: `changeSrc@${chatId}@${messageId}@${gid}@${taskId}@${respIndex}`
+          };
+        });
+        keyboard.push(row);
+      }
+
+      // Добавляем последнюю строку с кнопкой "Назад" // this значит будет перерисовано это сообщение, а не будет выслано новое
+      keyboard.push([
+        {
+          text: 'Назад',
+          callback_data: `showTask@${chatId}@${messageId}@${gid}@${taskId}@thisMsg`
+        }
+      ]);
+
+      console.log(keyboard);
+      await TelegramHelper.updateTaskButtons(chatId, messageId, {
+        inline_keyboard: keyboard
+      });
+
+    } catch (err) {
+      console.error(`⚠️ Ошибка при выполнении showSrc ⚠️\n`, err.message);
+      // throw err;
+    }
+  }
+
+
   static async deleteTask(query) {
     try {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
@@ -140,12 +194,12 @@ class BotController {
       await TelegramHelper.bot.sendMessage(
         chatId,
         `❌ Задача удалена:\n\n` +
-        `<b>${task.C}</b>\n\n` +
-        `Ответственный: ${task.D}\n` +
-        `Источник: ${task.E}\n` +
-        `Приоритет: ${task.F}\n` +
-        `Комментарий: ${task.H}\n` +
-        `Статус: ${task.I}\n\n` +
+        `<b>${task.name}</b>\n\n` +
+        `Ответственный: ${task.responsible}\n` +
+        `Источник: ${task.source}\n` +
+        `Приоритет: ${task.priority}\n` +
+        `Комментарий: ${task.comment}\n` +
+        `Статус: ${task.status}\n\n` +
         `${task.sheetName}`,
         { parse_mode: 'HTML' });
 
@@ -169,13 +223,10 @@ class BotController {
       // Получаем задачу по id
       let task = await GoogleHelper.getTaskById(gid, taskId);
 
-      // ft это fromTable
-      let [ftTaskId, ftIsCompleted, ftTaskText, ftResponsibleName, ftSourceName, ftPriority, ftB24link, ftComment, ftStatus, ftPenalty] = Object.values(task);
       // Информируем, о том, что мы выбираем нового исполнителя задачи
-      let taskText = StorageController.tasks[`${chatId}@${messageId}`];
       let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
       let newMessage = `👀 Задача:\n\n` +
-        `<b>${taskText}</b>\n\n` +
+        `<b>${task.name}</b>\n\n` +
         `${aHref}\n\n` +
         `<i>Используйте клавиатуру, чтобы изменить:\n` +
         `Исполнителя / Источник,\n` +
@@ -184,12 +235,12 @@ class BotController {
       const keyboardForCreatedTask = {
         inline_keyboard: [
           [
-            { text: `${ftResponsibleName}`, callback_data: `showResp@${chatId}@${messageId}@${gid}@${taskId}` },
-            { text: `${ftSourceName}`, callback_data: `showSrc@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${task.responsible}`, callback_data: `showResp@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${task.source}`, callback_data: `showSrc@${chatId}@${messageId}@${gid}@${taskId}` },
           ],
           [
-            { text: `${ftPriority}`, callback_data: `showPriority@${chatId}@${messageId}@${gid}@${taskId}` },
-            { text: `${ftStatus}`, callback_data: `showStatus@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${task.priority}`, callback_data: `showPriority@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${task.status}`, callback_data: `showStatus@${chatId}@${messageId}@${gid}@${taskId}` },
           ],
           [
             { text: '❌ Удалить задачу', callback_data: `deleteTask@${chatId}@${messageId}@${gid}@${taskId}` },
