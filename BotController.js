@@ -58,12 +58,12 @@ class BotController {
       const keyboardForCreatedTask = {
         inline_keyboard: [
           [
-            { text: `${responsibleName}`, callback_data: `showResp@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-            { text: `${sourceName}`, callback_data: `showSrc@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
+            { text: `${responsibleName}`, callback_data: `showBtns@${chatId}@${messageId}@${sprintObj.gid}@${taskId}@resp` },
+            { text: `${sourceName}`, callback_data: `showBtns@${chatId}@${messageId}@${sprintObj.gid}@${taskId}@src` },
           ],
           [
-            { text: `${priority}`, callback_data: `showPriority@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
-            { text: `${status}`, callback_data: `showStatus@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
+            { text: `${priority}`, callback_data: `showBtns@${chatId}@${messageId}@${sprintObj.gid}@${taskId}@priority` },
+            { text: `${status}`, callback_data: `showBtns@${chatId}@${messageId}@${sprintObj.gid}@${taskId}@status` },
           ],
           [
             { text: '❌ Удалить задачу', callback_data: `deleteTask@${chatId}@${messageId}@${sprintObj.gid}@${taskId}` },
@@ -80,70 +80,21 @@ class BotController {
   }
 
   // Выдает задачу и кнопки с ответственными
-  static async showResp(query) {
+  static async showBtns(query) {
     try {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
 
       let gid = param1;
       let taskId = param2;
+      let buttonsCategory = param3; // resp, src, priority, status
+
+      // Получаем задачу по id
+      let task = await GoogleHelper.getTaskById(gid, taskId);
 
       // Информируем, о том, что мы выбираем нового исполнителя задачи
-      let taskText = StorageController.tasks[`${chatId}@${messageId}`];
-      let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
-      let newMessage = `✍️ Выбор нового исполнителя задачи:\n\n` +
-        `<b>${taskText}</b>\n\n` +
-        `${aHref}\n\n` +
-        `<i>Используйте клавиатуру, чтобы изменить:\n` +
-        `Исполнителя</i>`;
-      await TelegramHelper.editMessageText(chatId, messageId, newMessage);
-
-      let buttonsInRow = 4; // Количество кнопок в одном ряду
-      // Формируем кнопки по заданному числу в ряд
-      let keyboard = [];
-      let { responsibles } = StorageController;
-      for (let i = 0; i < responsibles.length; i += buttonsInRow) {
-        let row = responsibles.slice(i, i + buttonsInRow).map((resp, respIndex) => {
-          return {
-            text: resp,
-            callback_data: `changeResp@${chatId}@${messageId}@${gid}@${taskId}@${respIndex}`
-          };
-        });
-        keyboard.push(row);
-      }
-
-      // Добавляем последнюю строку с кнопкой "Назад" // this значит будет перерисовано это сообщение, а не будет выслано новое
-      keyboard.push([
-        {
-          text: 'Назад',
-          callback_data: `showTask@${chatId}@${messageId}@${gid}@${taskId}@thisMsg`
-        }
-      ]);
-
-      console.log(keyboard);
-      await TelegramHelper.updateTaskButtons(chatId, messageId, {
-        inline_keyboard: keyboard
-      });
-
-    } catch (err) {
-      console.error(`⚠️ Ошибка при выполнении showResp ⚠️\n`, err.message);
-      // throw err;
-    }
-  }
-
-
-  // Выдает задачу и кнопки с ответственными
-  static async showSrc(query) {
-    try {
-      const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
-
-      let gid = param1;
-      let taskId = param2;
-
-      // Информируем, о том, что мы выбираем нового исполнителя задачи
-      let taskText = StorageController.tasks[`${chatId}@${messageId}`];
       let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
       let newMessage = `✍️ Выбор источника (постановщика) задачи:\n\n` +
-        `<b>${taskText}</b>\n\n` +
+        `<b>${task.name}</b>\n\n` +
         `${aHref}\n\n` +
         `<i>Используйте клавиатуру, чтобы изменить:\n` +
         `Исполнителя</i>`;
@@ -152,12 +103,18 @@ class BotController {
       let buttonsInRow = 4; // Количество кнопок в одном ряду
       // Формируем кнопки по заданному числу в ряд
       let keyboard = [];
-      let { sources } = StorageController;
-      for (let i = 0; i < sources.length; i += buttonsInRow) {
-        let row = sources.slice(i, i + buttonsInRow).map((resp, respIndex) => {
+
+      let buttons;
+      if (buttonsCategory == 'resp') buttons = StorageController.responsibles;
+      if (buttonsCategory == 'src') buttons = StorageController.sources;
+      if (buttonsCategory == 'priority') buttons = StorageController.priorities;
+      if (buttonsCategory == 'status') buttons = StorageController.statuses;
+      
+      for (let i = 0; i < buttons.length; i += buttonsInRow) {
+        let row = buttons.slice(i, i + buttonsInRow).map((button, buttonIndex) => {
           return {
-            text: resp,
-            callback_data: `changeSrc@${chatId}@${messageId}@${gid}@${taskId}@${respIndex}`
+            text: button,
+            callback_data: `change@${chatId}@${messageId}@${gid}@${taskId}@${buttonIndex}`
           };
         });
         keyboard.push(row);
@@ -235,12 +192,12 @@ class BotController {
       const keyboardForCreatedTask = {
         inline_keyboard: [
           [
-            { text: `${task.responsible}`, callback_data: `showResp@${chatId}@${messageId}@${gid}@${taskId}` },
-            { text: `${task.source}`, callback_data: `showSrc@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${task.responsible}`, callback_data: `showBtns@${chatId}@${messageId}@${gid}@${taskId}@resp` },
+            { text: `${task.source}`, callback_data: `showBtns@${chatId}@${messageId}@${gid}@${taskId}@src` },
           ],
           [
-            { text: `${task.priority}`, callback_data: `showPriority@${chatId}@${messageId}@${gid}@${taskId}` },
-            { text: `${task.status}`, callback_data: `showStatus@${chatId}@${messageId}@${gid}@${taskId}` },
+            { text: `${task.priority}`, callback_data: `showBtns@${chatId}@${messageId}@${gid}@${taskId}@priority` },
+            { text: `${task.status}`, callback_data: `showBtns@${chatId}@${messageId}@${gid}@${taskId}@status` },
           ],
           [
             { text: '❌ Удалить задачу', callback_data: `deleteTask@${chatId}@${messageId}@${gid}@${taskId}` },
