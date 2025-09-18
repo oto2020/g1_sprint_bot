@@ -1,6 +1,5 @@
 // BotController.js
-const GoogleHelper = require('./GoogleHelper');
-const TelegramHelper = require('./TelegramHelper');
+const MainHelper = require('./MainHelper');
 const StorageController = require('./StorageController');
 
 class BotController {
@@ -13,13 +12,13 @@ class BotController {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
 
       // актуализируем спринты для понимания предыдущего, текущего и следующего
-      let sheets = await GoogleHelper.getAllSheetNamesAndGids();
+      let sheets = await MainHelper.getAllSheetNamesAndGids();
       let sprintObj = (param1 === 'toCurrent') ?
-        sheets.find(s => new RegExp(`спринт ${GoogleHelper.getCurrentSprintNumber()} `).test(s.title)) :
-        sheets.find(s => new RegExp(`спринт ${GoogleHelper.getNextSprintNumber()} `).test(s.title));
+        sheets.find(s => new RegExp(`спринт ${MainHelper.getCurrentSprintNumber()} `).test(s.title)) :
+        sheets.find(s => new RegExp(`спринт ${MainHelper.getNextSprintNumber()} `).test(s.title));
 
       // находим первую попавшуюся свободную строку
-      let firstEmptyRow = await GoogleHelper.findFirstEmptyRow(sprintObj.gid, 'C:C');
+      let firstEmptyRow = await MainHelper.findFirstEmptyRow(sprintObj.gid, 'C:C');
 
       // Формируем строку с датой-временем
       const now = new Date();
@@ -44,16 +43,16 @@ class BotController {
       let status = "Требует внимания ⚠️";
       // делаем запись в строку: формируем массив для строки
       let row = [taskId, isCompleted, taskText, responsibleName, sourceName, priority, linkB24, comment, status];
-      GoogleHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
+      MainHelper.writeToRange(sprintObj.gid, `A${firstEmptyRow}:I${firstEmptyRow}`, [row]);
 
       // Информируем, что задача поставлена
       let newMessage = `✅ Задача поставлена:\n\n` +
         `<b>${taskText}</b>\n\n` +
-        `<a href="https://docs.google.com/spreadsheets/d/${GoogleHelper.S_ID}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
+        `<a href="https://docs.google.com/spreadsheets/d/${MainHelper.S_ID}/edit#gid=${sprintObj.gid}&range=B${firstEmptyRow}">${sprintObj.title}, строка ${firstEmptyRow}</a>\n\n` +
         `<i>Используйте клавиатуру, чтобы изменить:\n` +
         `Исполнителя / Источник,\n` +
         `Срочность / Статус задачи</i>`;
-      await TelegramHelper.editMessageText(chatId, messageId, newMessage);
+      await MainHelper.editMessageText(chatId, messageId, newMessage);
 
       const keyboardForCreatedTask = {
         inline_keyboard: [
@@ -71,7 +70,7 @@ class BotController {
         ]
       };
 
-      await TelegramHelper.updateTaskButtons(chatId, messageId, keyboardForCreatedTask);
+      await MainHelper.updateTaskButtons(chatId, messageId, keyboardForCreatedTask);
 
     } catch (err) {
       console.error(`⚠️ Ошибка при выполнении createTask ⚠️\n`, err.message);
@@ -89,16 +88,16 @@ class BotController {
       let buttonsCategory = param3; // resp, src, priority, status
 
       // Получаем задачу по id
-      let task = await GoogleHelper.getTaskById(gid, taskId);
+      let task = await MainHelper.getTaskById(gid, taskId);
 
       // Информируем, о том, что мы выбираем нового исполнителя задачи
-      let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
+      let aHref = await MainHelper.generateTaskLink(gid, taskId);
       let newMessage = `✍️ Выбор источника (постановщика) задачи:\n\n` +
         `<b>${task.name}</b>\n\n` +
         `${aHref}\n\n` +
         `<i>Используйте клавиатуру, чтобы изменить:\n` +
         `Исполнителя</i>`;
-      await TelegramHelper.editMessageText(chatId, messageId, newMessage);
+      await MainHelper.editMessageText(chatId, messageId, newMessage);
 
       let buttonsInRow = 4; // Количество кнопок в одном ряду
       // Формируем кнопки по заданному числу в ряд
@@ -129,7 +128,7 @@ class BotController {
       ]);
 
       console.log(keyboard);
-      await TelegramHelper.updateTaskButtons(chatId, messageId, {
+      await MainHelper.updateTaskButtons(chatId, messageId, {
         inline_keyboard: keyboard
       });
 
@@ -146,9 +145,9 @@ class BotController {
 
       let gid = param1;
       let taskId = param2;
-      let task = await GoogleHelper.deleteRowBySubstringInA(gid, taskId);
-      await TelegramHelper.bot.deleteMessage(chatId, messageId);
-      await TelegramHelper.bot.sendMessage(
+      let task = await MainHelper.deleteRowBySubstringInA(gid, taskId);
+      await MainHelper.bot.deleteMessage(chatId, messageId);
+      await MainHelper.bot.sendMessage(
         chatId,
         `❌ Задача удалена:\n\n` +
         `<b>${task.name}</b>\n\n` +
@@ -178,10 +177,10 @@ class BotController {
       let isThisMessage = param3 === 'thisMsg';
 
       // Получаем задачу по id
-      let task = await GoogleHelper.getTaskById(gid, taskId);
+      let task = await MainHelper.getTaskById(gid, taskId);
 
       // Информируем, о том, что мы выбираем нового исполнителя задачи
-      let aHref = await GoogleHelper.generateTaskLink(gid, taskId);
+      let aHref = await MainHelper.generateTaskLink(gid, taskId);
       let newMessage = `👀 Задача:\n\n` +
         `<b>${task.name}</b>\n\n` +
         `${aHref}\n\n` +
@@ -207,8 +206,8 @@ class BotController {
 
       // если нужно изменить текущее сообщение
       if (isThisMessage) {
-        await TelegramHelper.editMessageText(chatId, messageId, newMessage);
-        await TelegramHelper.updateTaskButtons(chatId, messageId, keyboardForCreatedTask);
+        await MainHelper.editMessageText(chatId, messageId, newMessage);
+        await MainHelper.updateTaskButtons(chatId, messageId, keyboardForCreatedTask);
       }
 
 
@@ -221,7 +220,7 @@ class BotController {
   static async cancelCreation(query) {
     try {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
-      await TelegramHelper.bot.deleteMessage(chatId, messageId);
+      await MainHelper.bot.deleteMessage(chatId, messageId);
     } catch (err) {
       console.error(`⚠️ Ошибка при выполнении cancelCreation ⚠️\n`, err.message);
       // throw err;
@@ -232,7 +231,7 @@ class BotController {
       const [buttonAction, chatId, messageId, param1, param2, param3, param4] = query.data.split('@');
 
       // актуализируем спринты для понимания предыдущего, текущего и следующего
-      let sheets = await GoogleHelper.getAllSheetNamesAndGids();
+      let sheets = await MainHelper.getAllSheetNamesAndGids();
 
     } catch (err) {
       console.error(`⚠️ Ошибка при выполнении НАПИСАТЬ НАЗВАНИЕ МЕТОДА !!! ⚠️\n`, err.message);

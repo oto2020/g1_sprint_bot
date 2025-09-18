@@ -2,8 +2,7 @@
 // app.js
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const GoogleHelper = require('./GoogleHelper');
-const TelegramHelper = require('./TelegramHelper');
+const MainHelper = require('./MainHelper');
 const BotController = require('./BotController');
 const StorageController = require('./StorageController');
 
@@ -13,20 +12,19 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const REFERENCE_BOOK_GID = Number(process.env.REFERENCE_BOOK_GID);
 
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
-TelegramHelper.init(bot); // теперь бот доступен из TelegramHelper.bot
 
 
 (async () => {
     // // Обязательно инициализируем Google API перед обработкой команд
-    await GoogleHelper.init(SPREADSHEET_ID);
+    await MainHelper.init(SPREADSHEET_ID, bot); // теперь бот доступен из MainHelper.bot
 
     // Просто так получаем список листов в таблице
-    let sheets = await GoogleHelper.getAllSheetNamesAndGids();
+    let sheets = await MainHelper.getAllSheetNamesAndGids();
     console.log('📄 Список листов в таблице:');
     console.table(sheets);
 
     // Заливаем список кнопок с отв./ист./приор./статусами в StorageController
-    let tmp = await GoogleHelper.getSourcesPrioritiesStatusesFromColumns(REFERENCE_BOOK_GID);
+    let tmp = await MainHelper.getSourcesPrioritiesStatusesFromColumns(REFERENCE_BOOK_GID);
     StorageController.responsibles = tmp.responsibles;
     StorageController.sources = tmp.sources;
     StorageController.priorities = tmp.priorities;
@@ -112,7 +110,7 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
                 ]]
         };
 
-        await TelegramHelper.updateTaskButtons(chatId, messageId, keyboard)
+        await MainHelper.updateTaskButtons(chatId, messageId, keyboard)
     });
 
 
@@ -157,10 +155,10 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
         }
 
         try {
-            const sheetName = await GoogleHelper.getSheetNameByGid(REFERENCE_BOOK_GID);
+            const sheetName = await MainHelper.getSheetNameByGid(REFERENCE_BOOK_GID);
             if (!sheetName) throw new Error('Лист с заданным GID не найден');
 
-            const res = await GoogleHelper.gsapi.spreadsheets.values.get({
+            const res = await MainHelper.gsapi.spreadsheets.values.get({
                 spreadsheetId: SPREADSHEET_ID,
                 range: `${sheetName}!A2:C`
             });
@@ -172,7 +170,7 @@ TelegramHelper.init(bot); // теперь бот доступен из TelegramH
             if (match) {
                 const [department, number, email] = match.row;
 
-                await GoogleHelper.writeToRange(REFERENCE_BOOK_GID, `D${index + 2}`, [[chatId]]);
+                await MainHelper.writeToRange(REFERENCE_BOOK_GID, `D${index + 2}`, [[chatId]]);
                 bot.sendMessage(chatId,
                     `👋 Привет!\n\nТы из подразделения: <b>${department}</b>\n📞 Номер: <b>${number}</b>\n📧 Email: <b>${email || 'не указан'}</b>\n\n` +
                     `Чтобы поставить задачу просто напиши её боту`,
